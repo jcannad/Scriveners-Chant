@@ -11,6 +11,8 @@ import argparse
 import queue
 import sys
 from collections.abc import Sequence
+from datetime import datetime
+from pathlib import Path
 
 import numpy as np
 import sounddevice as sd
@@ -105,6 +107,9 @@ def transcribe_chunk(
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
 
+    transcript_directory = Path("transcripts")
+    transcript_directory.mkdir(parents=True, exist_ok=True)
+
     if args.list_devices:
         print(sd.query_devices())
         return 0
@@ -142,50 +147,60 @@ def main(argv: Sequence[str] | None = None) -> int:
     audio_buffer = np.empty(0, dtype=np.float32)
     processed_sample_count = 0
 
+    filename = f"transcription_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+    transcript_path = transcript_directory / filename
+
     print("Listening. Press Ctrl+C to stop.")
     print(
         f"Input device: "
         f"{args.input_device if args.input_device is not None else 'default'}"
     )
     print(f"Chunk length: {args.chunk_seconds:g} seconds\n")
+    print(f"Saving transcription to: {filename}")
 
     try:
-        with sd.InputStream(
-            samplerate=SAMPLE_RATE,
-            blocksize=audio_block_size,
-            device=args.input_device,
-            channels=CHANNELS,
-            dtype="float32",
-            callback=audio_callback,
-        ):
-            while True:
-                audio_block = audio_queue.get()
-                audio_buffer = np.concatenate((audio_buffer, audio_block))
+        with transcript_path.open("w", encoding="utf-8") as transcript_file:
+            
+            with sd.InputStream(
+                samplerate=SAMPLE_RATE,
+                blocksize=audio_block_size,
+                device=args.input_device,
+                channels=CHANNELS,
+                dtype="float32",
+                callback=audio_callback,
+            ):
+                while True:
+                    audio_block = audio_queue.get()
+                    audio_buffer = np.concatenate((audio_buffer, audio_block))
 
-                while audio_buffer.size >= chunk_sample_count:
-                    audio_chunk = audio_buffer[:chunk_sample_count]
-                    audio_buffer = audio_buffer[chunk_sample_count:]
+                    while audio_buffer.size >= chunk_sample_count:
+                        audio_chunk = audio_buffer[:chunk_sample_count]
+                        audio_buffer = audio_buffer[chunk_sample_count:]
 
-                    chunk_start = processed_sample_count / SAMPLE_RATE
-                    processed_sample_count += chunk_sample_count
-                    chunk_end = processed_sample_count / SAMPLE_RATE
+                        chunk_start = processed_sample_count / SAMPLE_RATE
+                        processed_sample_count += chunk_sample_count
+                        chunk_end = processed_sample_count / SAMPLE_RATE
 
-                    text = transcribe_chunk(
-                        model=model,
-                        audio=audio_chunk,
-                        language=args.language,
-                    )
-
-                    if text:
-                        start_label = format_timestamp(chunk_start)
-                        end_label = format_timestamp(chunk_end)
-                        print(
-                            f"[{start_label}–{end_label}] {text}",
-                            flush=True,
+                        text = transcribe_chunk(
+                            model=model,
+                            audio=audio_chunk,
+                            language=args.language,
                         )
+
+                        if text:
+                            start_label = format_timestamp(chunk_start)
+                            end_label = format_timestamp(chunk_end)
+
+                            transcript_file.write(f"[{start_label}–{end_label}] {text}\n")
+                            
+                            print(
+                                f"[{start_label}–{end_label}] {text}",
+                                flush=True,
+                            )
 
     except KeyboardInterrupt:
         print("\nStopped listening.")
+        transcript_file.close()
         return 0
     except sd.PortAudioError as exc:
         print(f"\nAudio-device error: {exc}", file=sys.stderr)

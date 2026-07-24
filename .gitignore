@@ -5,3 +5,7 @@ __pycache__/
 
 # Secrets
 .env
+
+# Locally generated data
+transcripts/
+transcription_*.txt
