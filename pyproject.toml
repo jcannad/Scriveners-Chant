@@ -8,3 +8,8 @@ dependencies = [
     "pyside6>=6.11.1",
     "sounddevice>=0.5.5",
 ]
+
+[dependency-groups]
+dev = [
+    "pyinstaller>=6.21.0",
+]
