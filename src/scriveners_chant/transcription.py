@@ -46,9 +46,10 @@ class TranscriptionWorker(QObject):
     error_occurred = Signal(str)
     finished = Signal()
 
-    def __init__(self, args):
+    def __init__(self, args, input_device):
         super().__init__()
         self.args = args
+        self.input_device = input_device
         self._stop_requested = threading.Event()
 
         
@@ -106,7 +107,7 @@ class TranscriptionWorker(QObject):
                 with sd.InputStream(
                     samplerate=SAMPLE_RATE,
                     blocksize=audio_block_size,
-                    device=self.args.input_device,
+                    device=self.input_device,
                     channels=CHANNELS,
                     dtype="float32",
                     callback=audio_callback,
