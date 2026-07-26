@@ -62,6 +62,16 @@ class MainWindow(QtWidgets.QMainWindow):
             if device["max_input_channels"] <= 0:
                 continue
 
+            try:
+                sd.check_input_settings(
+                    device=device_index,
+                    channels=1,
+                    dtype="float32",
+                    samplerate=16_000,
+                )
+            except sd.PortAudioError:
+                continue
+
             host_api = host_apis[device["hostapi"]]
             sample_rate = int(device["default_samplerate"])
 
